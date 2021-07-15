@@ -26,8 +26,8 @@ def simulate(N):
 	x = np.linspace(-1,1,N)
 	y = np.linspace(-1,1,N)
 	grid = np.meshgrid(x,y)
-	noise = np.random.normal(0,0.1,size=(N,N))
-	image = gaussian2D(grid,0,0,0.5,0.5,1,0)
+	noise = np.random.normal(0,0.01,size=(N,N))
+	image = gaussian2D(grid,0.5,0.5,0.5,0.5,1,0)
 	return grid,image+noise
 
 def fit(grid,data,sat,peaks=1):
@@ -38,8 +38,6 @@ def fit(grid,data,sat,peaks=1):
 	"""
 	Ndata = np.count_nonzero(sat==False) # number of usable data points
 	Nx,Ny = data.shape # number of points in x and y axes
-	x = np.arange(0,Nx) # (x indices) = (x position)*scale + translation
-	y = np.arange(0,Ny) # (y indices) = (y position)*scale + translation
 	X,Y = grid # index grid
 
 	mu_x = np.floor(X[sat].mean())
@@ -59,10 +57,13 @@ def fit(grid,data,sat,peaks=1):
 			else:
 				fit_x[:,k] = np.array([X[i,j],Y[i,j]])
 				fit_data[k] = data[i,j]
+			k += 1
 
 	[mx,my,ax,ay,N,C],cov = curve_fit(gaussian2D,fit_x,fit_data,guess_params)
-	print(cov)
-	return gaussian2D(grid,mx,my,ax,ay,N,C)
+	image = np.empty(data.shape)
+	image[sat] = gaussian2D((X[sat],Y[sat]),mx,my,ax,ay,N,C)
+	image[sat==False] = data[sat==False]
+	return image
 
 if __name__ == '__main__':
 
