@@ -33,8 +33,7 @@ def gaussian2Dmult(points,*args):
 
 
 def simulate(N):
-	""" Simulate noisy data to fit
-	"""
+	""" Simulate noisy data to fit """
 	x = np.linspace(-10,10,N)
 	y = x.copy()
 	grid = np.meshgrid(x,y)
@@ -47,6 +46,7 @@ def fit(grid,data,sat,peaks=1):
 	Function takes array image, its grid and boolean array of same shape,
 	which is True where pixels are saturated and False elsewhere.
 	Returns the image with saturated pixels corrected.
+	Saturated pixels in data can be represented by both 'nan' and 0 (zero) values.
 	"""
 	Ndata = np.count_nonzero(sat==False) # number of usable data points
 	Nx,Ny = data.shape # number of points in x and y axes
