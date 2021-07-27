@@ -39,7 +39,7 @@ def simulate(N):
 	grid = np.meshgrid(x,y)
 	noise = np.random.normal(0,1,size=(N,N))
 	image = gaussian2D(grid,-2,-1,1)+gaussian2D(grid,1,2,1.5)+gaussian2D(grid,1,-2,1)
-	return grid,image#+noise
+	return grid,image
 
 def fit(grid,data,sat,peaks=1):
 	"""
@@ -55,7 +55,7 @@ def fit(grid,data,sat,peaks=1):
 	mu_x = np.floor(X[sat].mean())
 	mu_y = np.floor(Y[sat].mean())
 
-	FWHM = 4.96#3*18.2/18
+	FWHM = 3*18.2/18#4.96#
 
 	N = data[np.isnan(data)==False].max()
 
@@ -82,6 +82,7 @@ def fit(grid,data,sat,peaks=1):
 	image = gaussian2Dmult((X,Y),*params)
 	image[sat==False] = data[sat==False]
 	return params,image
+
 
 if __name__ == '__main__':
 
