@@ -16,7 +16,7 @@ def gaussian2D(points,mx,my,N):
 		- N is an arbitrary normalization constant
 		- C is a baseline constant
 	"""
-	FWHM = 3*18.2/18 # pixels
+	FWHM = 4.96#3*18.2/18 # pixels
 	sigma = FWHM/(2*np.sqrt(2*np.log(2)))
 	alpha = 1/(2*sigma**2)
 	x,y = points
@@ -55,7 +55,7 @@ def fit(grid,data,sat,peaks=1):
 	mu_x = np.floor(X[sat].mean())
 	mu_y = np.floor(Y[sat].mean())
 
-	FWHM = 3*18.2/18
+	FWHM = 4.96#3*18.2/18
 
 	N = data[np.isnan(data)==False].max()
 
