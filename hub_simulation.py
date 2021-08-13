@@ -7,28 +7,34 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 
-def gaussian2D(points,mx,my,N):
+def gaussian(points,mx,my,N,theta,FWHMx,FWHMy):
 	"""
 	Gaussian function in 2D:
 		- points = (x,y) is the grid array at which the function is being evaluated
 		- (mx,my) = (mu_x,mu_y) is the centre of the distribution
-		- (ax,ay) = (alpha_x,alpha_y) = [1/(2 * sigma_x^2),1/(2 * sigma_y^2)]
 		- N is an arbitrary normalization constant
-		- C is a baseline constant
+		- FWHM is given in arcseconds
 	"""
-	FWHM = 4.96#3*18.2/18 # pixels
-	sigma = FWHM/(2*np.sqrt(2*np.log(2)))
-	alpha = 1/(2*sigma**2)
+	newFWHMx = FWHMx/6 # from arcsec to pixel
+	newFWHMy = FWHMy/6 # from arcsec to pixel
+	sigmax = newFWHMx/(2*np.sqrt(2*np.log(2)))
+	sigmay = newFWHMy/(2*np.sqrt(2*np.log(2)))
+	alphax = 1/(2*sigmax**2)
+	alphay = 1/(2*sigmay**2)
 	x,y = points
-	z = N * np.exp( - alpha*((x-mx)**2 + (y-my)**2) )
+	xl = x*np.cos(theta) - y*np.sin(theta)
+	yl = x*np.sin(theta) + y*np.cos(theta)
+	mxl = mx*np.cos(theta) - my*np.sin(theta)
+	myl = mx*np.sin(theta) + my*np.cos(theta)
+	z = N * np.exp( - alphax*(xl-mxl)**2 - alphay*(yl-myl)**2 )
 	return z
 
-def gaussian2Dmult(points,*args):
+def gaussianMult(points,*args):
 	""" Sum multiple 2D gaussian functions. """
 	z = 0
-	for i in range(len(args)//3):
-		mx,my,N = args[3*i:3*(i+1)]
-		z += gaussian2D(points,mx,my,N)
+	for i in range(len(args)//6):
+		mx,my,N,theta,FWHMx,FWHMy = args[6*i:6*(i+1)]
+		z += gaussian(points,mx,my,N,theta,FWHMx,FWHMy)
 	return z
 
 
@@ -37,11 +43,10 @@ def simulate(N):
 	x = np.linspace(-10,10,N)
 	y = x.copy()
 	grid = np.meshgrid(x,y)
-	noise = np.random.normal(0,1,size=(N,N))
-	image = gaussian2D(grid,-2,-1,1)+gaussian2D(grid,1,2,1.5)+gaussian2D(grid,1,-2,1)
+	image = gaussian(grid,-2,-1,1,0,18.2,18.2)+gaussian(grid,1,2,1.5,0,18.2,18.2)+gaussian(grid,1,-2,1,0,18.2,18.2)
 	return grid,image
 
-def fit(grid,data,sat,peaks=1):
+def fit(grid,data,sat,mu=[],theta=[],FWHM=[],peaks=1):
 	"""
 	Function takes array image, its grid and boolean array of same shape,
 	which is True where pixels are saturated and False elsewhere.
@@ -51,20 +56,33 @@ def fit(grid,data,sat,peaks=1):
 	Ndata = np.count_nonzero(sat==False) # number of usable data points
 	Nx,Ny = data.shape # number of points in x and y axes
 	X,Y = grid # index grid
-
-	mu_x = np.floor(X[sat].mean())
-	mu_y = np.floor(Y[sat].mean())
-
-	FWHM = 3*18.2/18#4.96#
-
+    
+	if len(mu)==0:
+		"""if peak centers are not suggested,
+		use mean saturated pixel position"""
+		mu_x = np.floor(X[sat].mean())
+		mu_y = np.floor(Y[sat].mean())
+		mu = np.array(peaks*[[mu_x,mu_y]])
+        
 	N = data[np.isnan(data)==False].max()
 
-	peak_params = np.array([mu_x,mu_y,N])
-	guess_params = peak_params.copy()
-	for i in range(1,peaks):
-		var = FWHM*np.random.normal(size=3)
-		guess_params = np.concatenate((guess_params,peak_params+var))
+	if len(theta)==0:
+		theta = np.array(peaks*[0])
 
+	if len(FWHM)==0:
+		FWHM = np.array(peaks*[[18.2,18.2]])
+
+	guess_params = np.empty(6*peaks)
+	for i in range(peaks):
+		mu_x,mu_y = mu[i,:]
+		FWHMx,FWHMy = FWHM[i,:]
+		guess_params[i*6:(i+1)*6] = [mu_x,mu_y,N,theta[i],FWHMx,FWHMy]
+
+		var = (FWHMx+FWHMy)/12*np.random.normal(size=3)
+		guess_params[i*6:i*6+3] += var
+
+	lower_bounds = peaks*[-np.inf,-np.inf,-np.inf,-np.pi,FWHMx-1,FWHMy-1]
+	upper_bounds = peaks*[ np.inf, np.inf, np.inf, np.pi,FWHMx+1,FWHMy+1]
 
 	fit_x = np.empty([2,Ndata],float)
 	fit_data = np.empty(Ndata,float)
@@ -78,8 +96,8 @@ def fit(grid,data,sat,peaks=1):
 				fit_data[k] = data[i,j]
 			k += 1
 
-	params,cov = curve_fit(gaussian2Dmult,fit_x,fit_data,guess_params,maxfev=4000)
-	image = gaussian2Dmult((X,Y),*params)
+	params,cov = curve_fit(gaussianMult,fit_x,fit_data,guess_params,bounds=(lower_bounds,upper_bounds),maxfev=4000)
+	image = gaussianMult((X,Y),*params)
 	image[sat==False] = data[sat==False]
 	return params,image
 
@@ -101,7 +119,7 @@ if __name__ == '__main__':
 	plt.imshow(data2)
 	plt.show()
 
-	params,fit_data = fit(grid,data,sat,peaks=3)
+	params,fit_data = fit(grid,data,sat,FWHM=np.array(3*[2*[18.2]]),peaks=3)
 
 	plt.imshow(fit_data)
 	plt.colorbar()
@@ -111,6 +129,6 @@ if __name__ == '__main__':
 	plt.colorbar()
 	plt.show()
 
-	print(params[:3])
-	print(params[3:6])
-	print(params[6:])
+	print(params[:6])
+	print(params[6:12])
+	print(params[12:])
