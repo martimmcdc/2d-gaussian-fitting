@@ -6,6 +6,7 @@ This script simulates the centre of a Hub-Filament System with saturated pixels
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
+from astropy.io import fits
 
 def gaussian(points,mx,my,N,theta,FWHMx,FWHMy):
 	"""
@@ -54,14 +55,14 @@ def fit(grid,data,sat,mu=[],theta=[],FWHM=[],peaks=1):
 	Saturated pixels in data can be represented by both 'nan' and 0 (zero) values.
 	"""
 	Ndata = np.count_nonzero(sat==False) # number of usable data points
-	Nx,Ny = data.shape # number of points in x and y axes
+	Ny,Nx = data.shape # number of points in x and y axes
 	X,Y = grid # index grid
     
 	if len(mu)==0:
 		"""if peak centers are not suggested,
 		use mean saturated pixel position"""
-		mu_x = np.floor(X[sat].mean())
-		mu_y = np.floor(Y[sat].mean())
+		mu_x = X[sat].mean()
+		mu_y = Y[sat].mean()
 		mu = np.array(peaks*[[mu_x,mu_y]])
         
 	N = data[np.isnan(data)==False].max()
@@ -89,17 +90,63 @@ def fit(grid,data,sat,mu=[],theta=[],FWHM=[],peaks=1):
 	k = 0
 	for i in range(Nx):
 		for j in range(Ny):
-			if sat[i,j]:
+			if sat[j,i]:
 				continue
 			else:
-				fit_x[:,k] = np.array([X[i,j],Y[i,j]])
-				fit_data[k] = data[i,j]
+				fit_x[:,k] = np.array([X[j,i],Y[j,i]])
+				fit_data[k] = data[j,i]
 			k += 1
 
 	params,cov = curve_fit(gaussianMult,fit_x,fit_data,guess_params,bounds=(lower_bounds,upper_bounds),maxfev=4000)
 	image = gaussianMult((X,Y),*params)
 	image[sat==False] = data[sat==False]
 	return params,image
+
+def display_fits(file,lims=[],return_vals=False):
+	"""
+	Display a 2D array image from a standard FITS file.
+	This function assumes the coordinates to be the galactic system,
+	where longitude increases from right to left
+	and latitude increases from bottom to top,
+	both in degrees.
+
+	The lims argument is a list which, if given, must contain:
+	1. Left limit (xl)
+	2. Right limit (xr)
+	3. Bottom limit (yb)
+	4. Top limit (yt)
+	of the window in this order.
+	"""
+    
+	# Open and read
+	hdulist = fits.open(file)
+	hdu = hdulist[0]
+	header = hdu.header
+	data = hdu.data
+
+	# Get axes right
+	x = header['crval1'] + header['cdelt1']*np.arange(0,header['naxis1'],1)
+	y = header['crval2'] + header['cdelt2']*np.arange(0,header['naxis2'],1)
+	y = y[::-1] # reverse y-axis to have 0 index at top of grid
+
+	# If window limits are given
+	if len(lims)==0:
+		xl,xr,yb,yt = x.max(),x.min(),y.min(),y.max()
+	else:
+		xl,xr,yb,yt = lims
+    
+	xsub = x[(x<=xl)&(x>=xr)]
+	ysub = y[(y>=yb)&(y<=yt)]
+    
+	data_sub = data[(y>=yb)&(y<=yt),:][:,(x<=xl)&(x>=xr)]
+
+	plt.figure(figsize=(8,8))
+	plt.imshow(np.log10(data_sub),extent=(xl,xr,yb,yt))
+	plt.show()
+
+	if return_vals:
+		return data_sub
+
 
 
 if __name__ == '__main__':
