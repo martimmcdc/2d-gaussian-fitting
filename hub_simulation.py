@@ -14,12 +14,10 @@ def gaussian(points,mx,my,N,theta,FWHMx,FWHMy):
 		- points = (x,y) is the grid array at which the function is being evaluated
 		- (mx,my) = (mu_x,mu_y) is the centre of the distribution
 		- N is an arbitrary normalization constant
-		- FWHM is given in arcseconds
+		- FWHM is given in the same units as the 'points' argument
 	"""
-	newFWHMx = FWHMx/6 # from arcsec to pixel
-	newFWHMy = FWHMy/6 # from arcsec to pixel
-	sigmax = newFWHMx/(2*np.sqrt(2*np.log(2)))
-	sigmay = newFWHMy/(2*np.sqrt(2*np.log(2)))
+	sigmax = FWHMx/(2*np.sqrt(2*np.log(2)))
+	sigmay = FWHMy/(2*np.sqrt(2*np.log(2)))
 	alphax = 1/(2*sigmax**2)
 	alphay = 1/(2*sigmay**2)
 	x,y = points
@@ -54,6 +52,7 @@ def fit(grid,data,sat,mu=[],theta=[],FWHM=[],peaks=1):
 	Returns the image with saturated pixels corrected.
 	Saturated pixels in data can be represented by both 'nan' and 0 (zero) values.
 	"""
+
 	Ndata = np.count_nonzero(sat==False) # number of usable data points
 	Ny,Nx = data.shape # number of points in x and y axes
 	X,Y = grid # index grid
@@ -79,11 +78,8 @@ def fit(grid,data,sat,mu=[],theta=[],FWHM=[],peaks=1):
 		FWHMx,FWHMy = FWHM[i,:]
 		guess_params[i*6:(i+1)*6] = [mu_x,mu_y,N,theta[i],FWHMx,FWHMy]
 
-		var = (FWHMx+FWHMy)/12*np.random.normal(size=3)
-		guess_params[i*6:i*6+3] += var
-
-	lower_bounds = peaks*[-np.inf,-np.inf,-np.inf,-np.pi,FWHMx-1,FWHMy-1]
-	upper_bounds = peaks*[ np.inf, np.inf, np.inf, np.pi,FWHMx+1,FWHMy+1]
+	lower_bounds = peaks*[X[sat].min()-1,Y[sat].min()-1,N,-np.pi,FWHMx-1,FWHMy-1]
+	upper_bounds = peaks*[X[sat].max()+1,Y[sat].max()+1,np.inf,np.pi,FWHMx+1,FWHMy+1]
 
 	fit_x = np.empty([2,Ndata],float)
 	fit_data = np.empty(Ndata,float)
@@ -145,7 +141,9 @@ def display_fits(file,lims=[],return_vals=False):
 	plt.show()
 
 	if return_vals:
-		return data_sub
+		grid = np.meshgrid(xsub,ysub)
+		sat_area = np.isnan(data_sub)
+		return grid,data_sub,sat_area
 
 
 
