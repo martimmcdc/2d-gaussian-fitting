@@ -42,10 +42,12 @@ def simulate(N):
 	x = np.linspace(-10,10,N)
 	y = x.copy()
 	grid = np.meshgrid(x,y)
-	image = gaussian(grid,-2,-1,1,0,18.2,18.2)+gaussian(grid,1,2,1.5,0,18.2,18.2)+gaussian(grid,1,-2,1,0,18.2,18.2)
+	image = gaussian(grid,-2,-1,1,0,18.2,18.2)
+	image += gaussian(grid,1,2,1.5,0,18.2,18.2)
+	image += gaussian(grid,1,-2,1,0,18.2,18.2)
 	return grid,image
 
-def fit(grid,data,sat,mu=[],theta=[],FWHM=[],peaks=1):
+def fit(grid,data,sat,mu=[],theta=[],FWHM=[],peaks=1,helper_peaks=False):
 	"""
 	Function takes array image, its grid and boolean array of same shape,
 	which is True where pixels are saturated and False elsewhere.
@@ -53,22 +55,17 @@ def fit(grid,data,sat,mu=[],theta=[],FWHM=[],peaks=1):
 	Saturated pixels in data can be represented by both 'nan' and 0 (zero) values.
 	"""
 
-	Ndata = np.count_nonzero(sat==False) # number of usable data points
 	Ny,Nx = data.shape # number of points in x and y axes
 	X,Y = grid # index grid
     
+    # initial guess for parameters
 	if len(mu)==0:
-		"""if peak centers are not suggested,
-		use mean saturated pixel position"""
 		mu_x = X[sat].mean()
 		mu_y = Y[sat].mean()
 		mu = np.array(peaks*[[mu_x,mu_y]])
-        
 	N = data[np.isnan(data)==False].max()
-
 	if len(theta)==0:
 		theta = np.array(peaks*[0])
-
 	if len(FWHM)==0:
 		FWHM = np.array(peaks*[[18.2,18.2]])
 
@@ -78,20 +75,39 @@ def fit(grid,data,sat,mu=[],theta=[],FWHM=[],peaks=1):
 		FWHMx,FWHMy = FWHM[i,:]
 		guess_params[i*6:(i+1)*6] = [mu_x,mu_y,N,theta[i],FWHMx,FWHMy]
 
-	lower_bounds = peaks*[X[sat].min()-1,Y[sat].min()-1,N,-np.pi,FWHMx-1,FWHMy-1]
-	upper_bounds = peaks*[X[sat].max()+1,Y[sat].max()+1,np.inf,np.pi,FWHMx+1,FWHMy+1]
+	lower_bounds = peaks*[X[sat].min()-1,Y[sat].min()-1,     N,-np.pi,FWHMx*(1-1e-2),FWHMy*(1-1e-2)]
+	upper_bounds = peaks*[X[sat].max()+1,Y[sat].max()+1,np.inf, np.pi,FWHMx*(1+1e-2),FWHMy*(1+1e-2)]
 
-	fit_x = np.empty([2,Ndata],float)
-	fit_data = np.empty(Ndata,float)
-	k = 0
-	for i in range(Nx):
-		for j in range(Ny):
-			if sat[j,i]:
-				continue
-			else:
-				fit_x[:,k] = np.array([X[j,i],Y[j,i]])
-				fit_data[k] = data[j,i]
-			k += 1
+	# add helper_peaks to the mix
+	if helper_peaks:
+		FWHMx,FWHMy = FWHM.mean(axis=0)
+
+		data0 = data[1:-1,1:-1]
+
+		prex = np.zeros(data.shape)
+		posx = prex.copy()
+		prey = prex.copy()
+		posy = prex.copy()
+
+		prex[1:-1,1:-1] = data0 - data[1:-1,:-2]
+		posx[1:-1,1:-1] = data0 - data[1:-1,2:]
+		prey[1:-1,1:-1] = data0 - data[:-2,1:-1]
+		posy[1:-1,1:-1] = data0 - data[2:,1:-1]
+
+		bool_maxima = (prex>0)&(posx>0)&(prey>0)&(posy>0)
+		maxima = np.array([X[bool_maxima],Y[bool_maxima],data[bool_maxima]])
+		m = len(maxima[0,:])
+
+		helper_params = np.empty(m*6)
+		for i in range(m):
+			mu_x,mu_y,N = maxima[:,i]
+			helper_params[i*6:(i+1)*6] = [mu_x,mu_y,N,0,FWHMx,FWHMy]
+			lower_bounds += [mu_x*(1-1e-1),mu_y*(1-1e-1),N*(1-1e-1),-np.pi,FWHMx*(1-1e-2),FWHMy*(1-1e-2)]
+			upper_bounds += [mu_x*(1+1e-1),mu_y*(1+1e-1),N*(1+1e-1), np.pi,FWHMx*(1+1e-2),FWHMy*(1+1e-2)]
+		guess_params = np.concatenate((guess_params,helper_params))
+
+	fit_x = np.array([X[sat==False],Y[sat==False]])
+	fit_data = data[sat==False]
 
 	params,cov = curve_fit(gaussianMult,fit_x,fit_data,guess_params,bounds=(lower_bounds,upper_bounds),maxfev=4000)
 	image = gaussianMult((X,Y),*params)
