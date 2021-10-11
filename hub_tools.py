@@ -179,7 +179,6 @@ def display_fits(file,lims=[],return_vals=False):
 	where longitude increases from right to left
 	and latitude increases from bottom to top,
 	both in degrees.
-
 	The lims argument is a list which, if given, must contain:
 	1. Left limit (xl)
 	2. Right limit (xr)
@@ -249,3 +248,47 @@ if __name__ == '__main__':
 	print(params[:6])
 	print(params[6:12])
 	print(params[12:])
+    
+def file_fitter(file,FWHMval):
+	grid,data,sat_area = display_fits(file,return_vals=True)
+    
+	if sat_area.any():
+		xl = float(input('left '))
+		xr = float(input('right '))
+		yb = float(input('bottom '))
+		yt = float(input('top '))
+        
+		grid_sub,data_sub,sat_area_sub = display_fits(file,lims=[xl,xr,yb,yt],return_vals=True)
+
+		#FWHM flexibility for extreme ellipses?
+		n = int(input("sources "))
+		FWHM_flex = int(input("FWHM flexible (0.5 -> default arcsec)? "))
+        
+		if not sat_area.any():
+			return "No Saturated Region"
+		try:
+			params,corrected = fitter(grid_sub,data_sub,sat_area_sub,FWHM=np.array(n*[2*[FWHMval]])/3600,peaks=n,helper_peaks=True,var_FWHM=FWHM_flex)
+			plt.figure(figsize=(8,8))
+			plt.imshow(np.log10(corrected),extent=(xl,xr,yb,yt))
+			for i in range(n):
+				plt.plot(params[i*6],params[i*6+1],'ro')
+			plt.show()
+            
+			center = (grid_sub[0][sat_area_sub].mean(),grid_sub[1][sat_area_sub].mean())
+			radii = np.ravel(np.sqrt((grid_sub[0]-center[0])**2 + (grid_sub[1]-center[1])**2))
+            
+			sigmax = params[4]/(2*np.sqrt(2*np.log(2)))
+			alphax = 1/(2*sigmax**2)
+			gauss = params[2]*np.exp(-alphax*radii**2)
+            
+			sort = np.argsort(radii)
+			plt.figure(figsize=(10,6))
+			plt.plot(radii[sort],np.ravel(data_sub)[sort],'x')
+			plt.plot(radii[sort],gauss[sort],'k-')
+			plt.show()
+            
+			return params,corrected
+		except:
+			return "uh oh"
+	else:
+		return "No Saturated Region"
