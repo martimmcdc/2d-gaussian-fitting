@@ -47,50 +47,75 @@ def simulate(N):
 	image += gaussian(grid,1,-2,1,0,18.2,18.2)
 	return grid,image
 
-def fitter(grid,data,sat,mu=[],theta=[],FWHM=[],peaks=1,helper_peaks=False,var_pos=0.1,var_theta=0.1,var_FWHM=0.01):
+def fitter(grid,data,sat,mu=[],theta=[],FWHM=[],peaks=1,
+	helper_peaks=False,units_theta='deg',units_FWHM='arcsec',
+	var_pos=0.01,var_theta=0.5,var_FWHM=0.5):
 	"""
 	Function takes array image, its grid and boolean array of same shape,
 	which is True where pixels are saturated and False elsewhere.
 	Returns the image with saturated pixels corrected.
-	Saturated pixels in data can be represented by both 'nan' and 0 (zero) values.
+	Saturated pixels in data can only be represented by 'nan' values.
 	"""
 
-	Ny,Nx = data.shape # number of points in x and y axes
-	X,Y = grid # index grid
+	X,Y = grid # unpack grid
     
-    # initial guess for parameters
+    # initial guess for peak positions
 	if len(mu)==0:
 		mu_x = X[sat].mean()
 		mu_y = Y[sat].mean()
-		mu = np.array(peaks*[[mu_x,mu_y]])
+		mu = np.array(peaks*[[mu_x,mu_y]],float)
+		mu_given = False
+	else:
+		mu_given = True
+
+	# initial guess for peak heights
 	N = data[np.isnan(data)==False].max()
+
+	# initial guess for semimajor-axis angle with x-axis
 	if len(theta)==0:
-		theta = np.array(peaks*[np.pi])
+		theta = np.zeros(peaks,float)
+		var_theta = np.pi
+	elif units_theta == 'deg':
+		theta *= np.pi/180
+		var_theta *= np.pi/180
+
+	# initial guess for Full-Width at Half Maximum
 	if len(FWHM)==0:
-		FWHM = np.array(peaks*[[18.2,18.2]])/3600
+		FWHM = np.ones([peaks,2],float)*18.2/3600
+	elif units_FWHM == 'arcsec':
+		FWHM /= 3600
+		var_FWHM /= 3600
 
-	lower_bounds,upper_bounds = [],[]
-	guess_params = np.empty(6*peaks)
-	for i in range(peaks):
-		mu_x,mu_y = mu[i,:]
-		FWHMx,FWHMy = FWHM[i,:]
-		guess_params[i*6:(i+1)*6] = [mu_x,mu_y,N*1.1,theta[i],FWHMx,FWHMy]
-		
-		lower_bounds += [
-			X[sat].min() - var_pos,
-			Y[sat].min() - var_pos,
-			N,
-			theta[i] - var_theta,
-			FWHMx * (1 - var_FWHM),
-			FWHMy * (1 - var_FWHM)]
+	guess_params = np.empty(6*peaks,float)
+	guess_params[::6] = mu[:,0]
+	guess_params[1::6] = mu[:,1]
+	guess_params[2::6] = N*1.1
+	guess_params[3::6] = theta
+	guess_params[4::6] = FWHM[:,0]
+	guess_params[5::6] = FWHM[:,1]
 
-		upper_bounds += [
-			X[sat].max() + var_pos,
-			Y[sat].max() + var_pos,
-			np.inf,
-			theta[i] + var_theta,
-			FWHMx * (1 + var_FWHM),
-			FWHMy * (1 + var_FWHM)]
+	lower_bounds = guess_params.copy()
+	upper_bounds = guess_params.copy()
+
+	if not mu_given:
+		lower_bounds[::6] = X[sat].min()
+		lower_bounds[1::6] = Y[sat].min()
+		upper_bounds[::6] = X[sat].max()
+		upper_bounds[1::6] = Y[sat].max()
+
+	lower_bounds[::6] -= var_pos
+	lower_bounds[1::6] -= var_pos
+	lower_bounds[2::6] = N
+	lower_bounds[3::6] -= var_theta
+	lower_bounds[4::6] -= var_FWHM
+	lower_bounds[5::6] -= var_FWHM
+
+	upper_bounds[::6] += var_pos
+	upper_bounds[1::6] += var_pos
+	upper_bounds[2::6] = np.inf
+	upper_bounds[3::6] += var_theta
+	upper_bounds[4::6] += var_FWHM
+	upper_bounds[5::6] += var_FWHM
 
 	# add helper_peaks to the mix
 	if helper_peaks:
@@ -107,30 +132,37 @@ def fitter(grid,data,sat,mu=[],theta=[],FWHM=[],peaks=1,helper_peaks=False,var_p
 		posy[1:-1,1:-1] = data0 - data[2:,1:-1]
 
 		bool_maxima = (prex>0)&(posx>0)&(prey>0)&(posy>0)
-		maxima = np.array([X[bool_maxima],Y[bool_maxima],data[bool_maxima]])
-		m = len(maxima[0,:])
+		maxima = np.array([X[bool_maxima],Y[bool_maxima],data[bool_maxima]]).transpose()
+		m = len(maxima[:,0])
 
 		helper_params = np.empty(m*6)
-		for i in range(m):
-			mu_x,mu_y,N = maxima[:,i]
-			helper_params[i*6:(i+1)*6] = [mu_x,mu_y,N,0,FWHMx,FWHMy]
+		helper_params[::6] = maxima[:,0]
+		helper_params[1::6] = maxima[:,1]
+		helper_params[2::6] = maxima[:,2]
+		helper_params[3::6] = 0
+		helper_params[4::6] = FWHMx
+		helper_params[5::6] = FWHMy
 
-			lower_bounds += [
-				mu_x - var_pos,
-				mu_y - var_pos,
-				N * 0.9,
-				-np.pi,
-				FWHMx * (1 - var_FWHM),
-				FWHMy * (1 - var_FWHM)]
+		helper_lb = helper_params.copy()
+		helper_ub = helper_params.copy()
 
-			upper_bounds += [
-				mu_x + var_pos,
-				mu_y + var_pos,
-				N * 1.1,
-				np.pi,
-				FWHMx * (1 + var_FWHM),
-				FWHMy * (1 + var_FWHM)]
+		helper_lb[::6] -= var_pos
+		helper_lb[1::6] -= var_pos
+		helper_lb[2::6] *= 0.9
+		helper_lb[3::6] -= np.pi
+		helper_lb[4::6] = 0
+		helper_lb[5::6] = 0
+
+		helper_ub[::6] += var_pos
+		helper_ub[1::6] += var_pos
+		helper_ub[2::6] *= 1.1
+		helper_ub[3::6] += np.pi
+		helper_ub[4::6] *= 2
+		helper_ub[5::6] *= 2
+
 		guess_params = np.concatenate((guess_params,helper_params))
+		lower_bounds = np.concatenate((lower_bounds,helper_lb))
+		upper_bounds = np.concatenate((upper_bounds,helper_ub))
 
 	fit_x = np.array([X[sat==False],Y[sat==False]])
 	fit_data = data[sat==False]
