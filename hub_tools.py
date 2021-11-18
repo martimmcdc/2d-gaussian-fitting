@@ -37,16 +37,6 @@ def gaussianMult(points,*args):
 	return z
 
 
-def simulate(N):
-	""" Simulate noisy data to fit """
-	x = np.linspace(-10,10,N)
-	y = x.copy()
-	grid = np.meshgrid(x,y)
-	image = gaussian(grid,-2,-1,1,0,18.2,18.2)
-	image += gaussian(grid,1,2,1.5,0,18.2,18.2)
-	image += gaussian(grid,1,-2,1,0,18.2,18.2)
-	return grid,image
-
 def fitter(grid,data,sat,mu=[],theta=[],FWHM=[],peaks=1,
 	helper_peaks=False,units_theta='deg',units_FWHM='arcsec',
 	var_pos=0.01,var_theta=0.5,var_FWHM=0.5):
@@ -217,37 +207,12 @@ def display_fits(file,lims=[],return_vals=False):
 		return grid,data_sub,sat_area
 
 
-
-if __name__ == '__main__':
-
-	grid,data = simulate(50)
-	x,y = grid[0][0,:],grid[1][:,0]
-	sat = data>0.5*data.max()
-	ticks = np.arange(0,100)
-	labels = np.linspace(-1,1,100)
-	plt.imshow(data)
-	plt.show()
-	plt.imshow(sat)
+def display_data(grid,data):
+	X,Y = grid
+	plt.figure(figsize=(8,8))
+	plt.imshow(np.log10(data),origin='lower',extent=(X.max(),X.min(),Y.min(),Y.max()))
 	plt.show()
 
-	data2 = data.copy()
-	data2[sat] = 0
-	plt.imshow(data2)
-	plt.show()
-
-	params,fit_data = fit(grid,data,sat,FWHM=np.array(3*[2*[18.2]]),peaks=3)
-
-	plt.imshow(fit_data)
-	plt.colorbar()
-	plt.show()
-
-	plt.imshow(fit_data-data)
-	plt.colorbar()
-	plt.show()
-
-	print(params[:6])
-	print(params[6:12])
-	print(params[12:])
     
 def file_fitter(file,FWHMval):
 	grid,data,sat_area = display_fits(file,return_vals=True)
