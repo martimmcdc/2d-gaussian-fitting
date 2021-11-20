@@ -37,7 +37,7 @@ def gaussianMult(points,*args):
 	return z
 
 
-def fitter(grid,data,sat,mu=[],theta=[],FWHM=[],peaks=1,
+def fitter(grid,data,sat,peaks=1,mu=[],theta=[],FWHM=[],
 	helper_peaks=False,units_theta='deg',units_FWHM='arcsec',
 	var_pos=0.01,var_theta=0.5,var_FWHM=0.5):
 	"""
@@ -199,19 +199,14 @@ def display_fits(file,lims=[],return_vals=False):
 
 	plt.figure(figsize=(8,8))
 	plt.imshow(np.log10(data_sub),origin='lower',extent=(xl,xr,yb,yt))
+	plt.xlabel(header['ctype1']+' [{}]'.format(header['cunit1']))
+	plt.ylabel(header['ctype2']+' [{}]'.format(header['cunit2']))
 	plt.show()
 
 	if return_vals:
 		grid = np.meshgrid(xsub,ysub)
 		sat_area = np.isnan(data_sub)
 		return grid,data_sub,sat_area
-
-
-def display_data(grid,data):
-	X,Y = grid
-	plt.figure(figsize=(8,8))
-	plt.imshow(np.log10(data),origin='lower',extent=(X.max(),X.min(),Y.min(),Y.max()))
-	plt.show()
 
     
 def file_fitter(file,FWHMval):
