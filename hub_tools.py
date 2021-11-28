@@ -38,7 +38,7 @@ def gaussianMult(points,*args):
 
 
 def fitter(grid,data,sat,peaks=1,mu=[],theta=[],FWHM=[],
-	helper_peaks=False,units_theta='deg',units_FWHM='arcsec',
+	bg_fitting=False,units_theta='deg',units_FWHM='arcsec',
 	var_pos=0.01,var_theta=0.5,var_FWHM=0.5):
 	"""
 	Function takes array image, its grid and boolean array of same shape,
@@ -108,7 +108,7 @@ def fitter(grid,data,sat,peaks=1,mu=[],theta=[],FWHM=[],
 	upper_bounds[5::6] += var_FWHM
 
 	# add helper_peaks to the mix
-	if helper_peaks:
+	if bg_fitting:
 		FWHMx,FWHMy = FWHM.mean(axis=0)
 
 		data0 = data[1:-1,1:-1]
@@ -222,14 +222,15 @@ def file_fitter(file,FWHMval):
 
 		#FWHM flexibility for extreme ellipses?
 		n = int(input("sources "))
-		FWHM_flex = int(input("FWHM flexible (0.5 -> default arcsec)? "))
-        
+		FWHM_flex = float(input("FWHM flexible (0.5 -> default arcsec)? "))
+		FWHM_v = float(FWHMval)
+            
 		if not sat_area.any():
 			return "No Saturated Region"
 		try:
-			params,corrected = fitter(grid_sub,data_sub,sat_area_sub,FWHM=np.array(n*[2*[FWHMval]])/3600,peaks=n,helper_peaks=True,var_FWHM=FWHM_flex)
+			params,corrected = fitter(grid_sub,data_sub,sat_area_sub,FWHM=np.array(n*[2*[FWHM_v]]),peaks=n,bg_fitting=True,var_FWHM=FWHM_flex)
 			plt.figure(figsize=(8,8))
-			plt.imshow(np.log10(corrected),extent=(xl,xr,yb,yt))
+			plt.imshow(np.log10(corrected),origin = "lower",extent=(xl,xr,yb,yt))
 			for i in range(n):
 				plt.plot(params[i*6],params[i*6+1],'ro')
 			plt.show()
@@ -237,9 +238,12 @@ def file_fitter(file,FWHMval):
 			center = (grid_sub[0][sat_area_sub].mean(),grid_sub[1][sat_area_sub].mean())
 			radii = np.ravel(np.sqrt((grid_sub[0]-center[0])**2 + (grid_sub[1]-center[1])**2))
             
-			sigmax = params[4]/(2*np.sqrt(2*np.log(2)))
-			alphax = 1/(2*sigmax**2)
-			gauss = params[2]*np.exp(-alphax*radii**2)
+			gauss = np.zeros(len(radii))
+			for i in range(n):
+				peak_rad = np.sqrt((params[6*i]-center[0])**2 + (params[6*i+1]-center[1])**2)
+				sigmax = params[6*i+4]/(2*np.sqrt(2*np.log(2)))
+				alphax = 1/(2*sigmax**2)
+				gauss += params[6*i+2]*np.exp(-alphax*(radii-peak_rad)**2)
             
 			sort = np.argsort(radii)
 			plt.figure(figsize=(10,6))
