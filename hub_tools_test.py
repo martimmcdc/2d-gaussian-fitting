@@ -49,7 +49,7 @@ def fitter(grid,data,peaks=1,mu=[],theta=[],FWHM=[],
 	"""
 
 	X,Y = grid # unpack grid
-	sat = np.isnan(data)
+	sat = np.isnan(data) # detect saturated pixels
 	mu = mu.copy()
 	theta = theta.copy()
 	FWHM = FWHM.copy()
@@ -78,6 +78,7 @@ def fitter(grid,data,peaks=1,mu=[],theta=[],FWHM=[],
 		FWHM /= 3600
 		var_FWHM /= 3600
 
+	# initial guess parameters
 	guess_params = np.empty(6*peaks,float)
 	guess_params[::6] = mu[:,0]
 	guess_params[1::6] = mu[:,1]
@@ -86,6 +87,7 @@ def fitter(grid,data,peaks=1,mu=[],theta=[],FWHM=[],
 	guess_params[4::6] = FWHM[:,0]
 	guess_params[5::6] = FWHM[:,1]
 
+	# upper and lower bounds for parameters
 	lower_bounds = guess_params.copy()
 	upper_bounds = guess_params.copy()
 	var_list = np.array([var_pos,var_pos,0,var_theta,var_FWHM,var_FWHM])
@@ -96,25 +98,31 @@ def fitter(grid,data,peaks=1,mu=[],theta=[],FWHM=[],
 	lower_bounds[2::6] = 0
 	upper_bounds[2::6] = np.inf
 
+	# limit fitting pixels to the vicinity of the sources
 	near_pixels = np.empty(list(X.shape)+[peaks],bool)
 	for i in range(peaks):
 		near_pixels[:,:,i] = np.sqrt((X-mu[i,0])**2 + (Y-mu[i,1])**2) <= dist_factor*FWHM[i,0]
 	near_pixels = near_pixels.any(axis=2)
 
+	# exclude background from fitting pixels
 	unsat_vals = np.sort(data[~sat].ravel())
 	index = int(exclude_below*len(unsat_vals))
 	above_min = data >= unsat_vals[index]
 
+	# processed data points to be fitted
 	conditions = (~sat) & near_pixels & above_min
-
 	fit_x = np.array([X[conditions],Y[conditions]])
 	fit_data = data[conditions]
 
+	# fitting
 	params,cov = curve_fit(gaussianMult,fit_x,fit_data,guess_params,bounds=(lower_bounds,upper_bounds),maxfev=4000)
+	
+	# generating final, corrected image
 	image = gaussianMult((X,Y),*params)
 	image[~sat] = data[~sat]
 	used_image = image.copy()
 	used_image[~conditions] = np.nan
+
 	plt.figure(figsize=(8,8))
 	plt.imshow(np.log10(used_image),origin='lower')
 	plt.show()
