@@ -40,7 +40,7 @@ def gaussianMult(points,*args):
 def fitter(grid,data,peaks=1,mu=[],theta=[],FWHM=[],
 	units_theta='deg',units_FWHM='arcsec',
 	var_pos=0.01,var_theta=0.5,var_FWHM=0.5,
-	dist_factor=2,exclude_below=0.1):
+	dist_factor=2,bg_factor=1):
 	"""
 	Function takes array image, its grid and boolean array of same shape,
 	which is True where pixels are saturated and False elsewhere.
@@ -107,18 +107,20 @@ def fitter(grid,data,peaks=1,mu=[],theta=[],FWHM=[],
 	# exclude background from fitting pixels
 	unsat_vals = np.sort(data[~sat].ravel())
 	index = int(exclude_below*len(unsat_vals))
-	above_min = data >= unsat_vals[index]
+	background = unsat_vals[index]
+	above_min = data >= background
+	guess_params[2::6] -= background
 
 	# processed data points to be fitted
 	conditions = (~sat) & near_pixels & above_min
 	fit_x = np.array([X[conditions],Y[conditions]])
-	fit_data = data[conditions]
+	fit_data = data[conditions] - background
 
 	# fitting
 	params,cov = curve_fit(gaussianMult,fit_x,fit_data,guess_params,bounds=(lower_bounds,upper_bounds),maxfev=4000)
 	
 	# generating final, corrected image
-	image = gaussianMult((X,Y),*params)
+	image = gaussianMult((X,Y),*params) + background
 	image[~sat] = data[~sat]
 	used_image = image.copy()
 	used_image[~conditions] = np.nan
