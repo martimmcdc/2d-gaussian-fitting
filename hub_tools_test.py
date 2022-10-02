@@ -36,11 +36,22 @@ def gaussianMult(points,*args):
 		z += gaussian(points,mx,my,N,theta,FWHMx,FWHMy)
 	return z
 
+def background(data,method='hist'):
+	data_sorted = np.sort(data.ravel())
+	if method == 'hist':
+		yhist,xhist = np.histogram(data_sorted,bins=len(np.unique(data_sorted)))
+		bg = xhist[np.argmax(yhist)]
+	elif method == 'mode':
+		bg = 2.5*np.median(data_sorted) - 1.5*np.mean(data_sorted)
+	else:
+		bg = 0
+	return bg
+
 
 def fitter(grid,data,peaks=1,mu=[],theta=[],FWHM=[],
 	units_theta='deg',units_FWHM='arcsec',
 	var_pos=0.01,var_theta=0.5,var_FWHM=0.5,
-	dist_factor=2,bg_factor=1):
+	dist_factor=2,bg_method='hist'):
 	"""
 	Function takes array image, its grid and boolean array of same shape,
 	which is True where pixels are saturated and False elsewhere.
@@ -105,22 +116,20 @@ def fitter(grid,data,peaks=1,mu=[],theta=[],FWHM=[],
 	near_pixels = near_pixels.any(axis=2)
 
 	# exclude background from fitting pixels
-	unsat_vals = np.sort(data[~sat].ravel())
-	index = int(exclude_below*len(unsat_vals))
-	background = unsat_vals[index]
-	above_min = data >= background
-	guess_params[2::6] -= background
+	bg = background(data[~sat].copy(),method=bg_method)
+	above_bg = data >= bg
+	guess_params[2::6] -= bg
 
 	# processed data points to be fitted
-	conditions = (~sat) & near_pixels & above_min
+	conditions = (~sat) & near_pixels & above_bg
 	fit_x = np.array([X[conditions],Y[conditions]])
-	fit_data = data[conditions] - background
+	fit_data = data[conditions] - bg
 
 	# fitting
 	params,cov = curve_fit(gaussianMult,fit_x,fit_data,guess_params,bounds=(lower_bounds,upper_bounds),maxfev=4000)
 	
 	# generating final, corrected image
-	image = gaussianMult((X,Y),*params) + background
+	image = gaussianMult((X,Y),*params) + bg
 	image[~sat] = data[~sat]
 	used_image = image.copy()
 	used_image[~conditions] = np.nan
