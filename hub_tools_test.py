@@ -39,8 +39,8 @@ def gaussianMult(points,*args):
 def background(data,method='hist'):
 	data_sorted = np.sort(data.ravel())
 	if method == 'hist':
-		yhist,xhist = np.histogram(data_sorted,bins=len(np.unique(data_sorted)))
-		bg = xhist[np.argmax(yhist)]
+		yhist,xhist = np.histogram(data_sorted,bins=10)
+		bg = xhist[np.argmax(yhist)+1]
 	elif method == 'mode':
 		bg = 2.5*np.median(data_sorted) - 1.5*np.mean(data_sorted)
 	else:
