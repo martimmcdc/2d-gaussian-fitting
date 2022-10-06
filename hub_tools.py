@@ -14,52 +14,75 @@ def gaussian(points,mx,my,N,theta,FWHMx,FWHMy):
 		- points = (x,y) is the grid array at which the function is being evaluated
 		- (mx,my) = (mu_x,mu_y) is the centre of the distribution
 		- N is an arbitrary normalization constant
+		- theta is the angle between the semi-major axis and the horizontal
 		- FWHM is given in the same units as the 'points' argument
 	"""
-	sigmax = FWHMx/(2*np.sqrt(2*np.log(2)))
-	sigmay = FWHMy/(2*np.sqrt(2*np.log(2)))
-	alphax = 1/(2*sigmax**2)
-	alphay = 1/(2*sigmay**2)
+	a = 2*np.sqrt(2*np.log(2))
+	sigmax,sigmay = FWHMx/a,FWHMy/a
+	alphax,alphay = 1/(2*sigmax**2),1/(2*sigmay**2)
 	x,y = points
-	xl = x*np.cos(theta) - y*np.sin(theta)
-	yl = x*np.sin(theta) + y*np.cos(theta)
-	mxl = mx*np.cos(theta) - my*np.sin(theta)
-	myl = mx*np.sin(theta) + my*np.cos(theta)
+	sin,cos = np.sin(theta),np.cos(theta)
+	xl = x*cos - y*sin
+	yl = x*sin + y*cos
+	mxl = mx*cos - my*sin
+	myl = mx*sin + my*cos
 	z = N * np.exp( - alphax*(xl-mxl)**2 - alphay*(yl-myl)**2 )
 	return z
 
 def gaussianMult(points,*args):
-	""" Sum multiple 2D gaussian functions. """
+	""" Sum multiple 2D gaussian functions at baseline = 0. """
 	z = 0
 	for i in range(len(args)//6):
 		mx,my,N,theta,FWHMx,FWHMy = args[6*i:6*(i+1)]
 		z += gaussian(points,mx,my,N,theta,FWHMx,FWHMy)
 	return z
 
-
-def fitter(grid,data,sat,peaks=1,mu=[],theta=[],FWHM=[],
-	bg_fitting=False,units_theta='deg',units_FWHM='arcsec',
-	var_pos=0.01,var_theta=0.5,var_FWHM=0.5):
+def background(data,method='hist'):
 	"""
-	Function takes array image, its grid and boolean array of same shape,
-	which is True where pixels are saturated and False elsewhere.
+	Background estimation for astronomical images.
+	The method argument selects the method of computation:
+		- 'hist':
+			Set background as maximum value of intensity histogram;
+		- 'mode':
+			Set background as mode of the dataset,
+			where mode = 2.5*median - 1.5*mean;
+		- otherwise background gets set to zero.
+	"""
+	if method == 'hist':
+		yhist,xhist = np.histogram(data,bins=len(np.unique(data)))
+		bg = xhist[np.argmax(yhist)]
+	elif method == 'mode':
+		bg = 2.5*np.median(data) - 1.5*np.mean(data)
+	else:
+		bg = 0
+	return bg
+
+
+def fitter(grid,data,peaks=1,mu=[],theta=[],FWHM=[],
+	units_theta='deg',units_FWHM='arcsec',
+	var_pos=0.01,var_theta=0.5,var_FWHM=0.5,
+	dist_factor=2,bg_method='hist'):
+	"""
+	Function takes array image, its grid.
 	Returns the image with saturated pixels corrected.
 	Saturated pixels in data can only be represented by 'nan' values.
 	"""
 
 	X,Y = grid # unpack grid
+	sat = np.isnan(data) # detect saturated pixels
+	
+	# use copies of peak info, because they may be changed in unit conversion
+	theta = theta.copy()
+	FWHM = FWHM.copy()
     
     # initial guess for peak positions
 	if len(mu)==0:
 		mu_x = X[sat].mean()
 		mu_y = Y[sat].mean()
 		mu = np.array(peaks*[[mu_x,mu_y]],float)
-		mu_given = False
-	else:
-		mu_given = True
 
 	# initial guess for peak heights
-	N = data[np.isnan(data)==False].max()
+	N = data[~sat].max()
 
 	# initial guess for semimajor-axis angle with x-axis
 	if len(theta)==0:
@@ -76,90 +99,53 @@ def fitter(grid,data,sat,peaks=1,mu=[],theta=[],FWHM=[],
 		FWHM /= 3600
 		var_FWHM /= 3600
 
+	# limit fitting pixels to the vicinity of the sources
+	near_pixels = np.empty(list(X.shape)+[peaks],bool)
+	for i in range(peaks):
+		near_pixels[:,:,i] = np.sqrt((X-mu[i,0])**2 + (Y-mu[i,1])**2) <= dist_factor*FWHM[i,0]
+	near_pixels = near_pixels.any(axis=2)
+
+	# exclude background from fitting pixels
+	bg = background(data[~sat].copy(),method=bg_method)
+	above_bg = data >= bg
+
+	# processed data points to be fitted
+	conditions = (~sat) & near_pixels & above_bg
+	fit_x = np.array([X[conditions],Y[conditions]])
+	fit_data = data[conditions] - bg
+
+	# initial guess parameters
 	guess_params = np.empty(6*peaks,float)
 	guess_params[::6] = mu[:,0]
 	guess_params[1::6] = mu[:,1]
-	guess_params[2::6] = N*1.1
+	guess_params[2::6] = N*1.1 - bg
 	guess_params[3::6] = theta
 	guess_params[4::6] = FWHM[:,0]
 	guess_params[5::6] = FWHM[:,1]
 
+	# upper and lower bounds for parameters
 	lower_bounds = guess_params.copy()
 	upper_bounds = guess_params.copy()
+	var_list = np.array([var_pos,var_pos,0,var_theta,var_FWHM,var_FWHM])
 
-	if not mu_given:
-		lower_bounds[::6] = X[sat].min()
-		lower_bounds[1::6] = Y[sat].min()
-		upper_bounds[::6] = X[sat].max()
-		upper_bounds[1::6] = Y[sat].max()
-
-	lower_bounds[::6] -= var_pos
-	lower_bounds[1::6] -= var_pos
-	lower_bounds[2::6] = N
-	lower_bounds[3::6] -= var_theta
-	lower_bounds[4::6] -= var_FWHM
-	lower_bounds[5::6] -= var_FWHM
-
-	upper_bounds[::6] += var_pos
-	upper_bounds[1::6] += var_pos
+	for i in range(6):
+		lower_bounds[i::6] -= var_list[i]
+		upper_bounds[i::6] += var_list[i]
+	lower_bounds[2::6] = 0
 	upper_bounds[2::6] = np.inf
-	upper_bounds[3::6] += var_theta
-	upper_bounds[4::6] += var_FWHM
-	upper_bounds[5::6] += var_FWHM
 
-	# add helper_peaks to the mix
-	if bg_fitting:
-		FWHMx,FWHMy = FWHM.mean(axis=0)
-
-		data0 = data[1:-1,1:-1]
-		prex = np.zeros(data.shape)
-		posx = prex.copy()
-		prey = prex.copy()
-		posy = prex.copy()
-		prex[1:-1,1:-1] = data0 - data[1:-1,:-2]
-		posx[1:-1,1:-1] = data0 - data[1:-1,2:]
-		prey[1:-1,1:-1] = data0 - data[:-2,1:-1]
-		posy[1:-1,1:-1] = data0 - data[2:,1:-1]
-
-		bool_maxima = (prex>0)&(posx>0)&(prey>0)&(posy>0)
-		maxima = np.array([X[bool_maxima],Y[bool_maxima],data[bool_maxima]]).transpose()
-		m = len(maxima[:,0])
-
-		helper_params = np.empty(m*6)
-		helper_params[::6] = maxima[:,0]
-		helper_params[1::6] = maxima[:,1]
-		helper_params[2::6] = maxima[:,2]
-		helper_params[3::6] = 0
-		helper_params[4::6] = FWHMx
-		helper_params[5::6] = FWHMy
-
-		helper_lb = helper_params.copy()
-		helper_ub = helper_params.copy()
-
-		helper_lb[::6] -= var_pos
-		helper_lb[1::6] -= var_pos
-		helper_lb[2::6] *= 0.9
-		helper_lb[3::6] -= np.pi
-		helper_lb[4::6] = 0
-		helper_lb[5::6] = 0
-
-		helper_ub[::6] += var_pos
-		helper_ub[1::6] += var_pos
-		helper_ub[2::6] *= 1.1
-		helper_ub[3::6] += np.pi
-		helper_ub[4::6] *= 2
-		helper_ub[5::6] *= 2
-
-		guess_params = np.concatenate((guess_params,helper_params))
-		lower_bounds = np.concatenate((lower_bounds,helper_lb))
-		upper_bounds = np.concatenate((upper_bounds,helper_ub))
-
-	fit_x = np.array([X[sat==False],Y[sat==False]])
-	fit_data = data[sat==False]
-
+	# fitting
 	params,cov = curve_fit(gaussianMult,fit_x,fit_data,guess_params,bounds=(lower_bounds,upper_bounds),maxfev=4000)
-	image = gaussianMult((X,Y),*params)
-	image[sat==False] = data[sat==False]
+	
+	# generating final, corrected image
+	image = gaussianMult((X,Y),*params) + bg
+	image[~sat] = data[~sat]
+	used_image = image.copy()
+	used_image[~conditions] = np.nan
+
+	plt.figure(figsize=(8,8))
+	plt.imshow(np.log10(used_image),origin='lower')
+	plt.show()
 	return params,image
 
 def display_fits(file,lims=[],return_vals=False):
