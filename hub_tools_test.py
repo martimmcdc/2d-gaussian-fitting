@@ -37,12 +37,21 @@ def gaussianMult(points,*args):
 	return z
 
 def background(data,method='hist'):
-	data_sorted = np.sort(data.ravel())
+	"""
+	Background estimation for astronomical images.
+	The method argument selects the method of computation:
+		- 'hist':
+			Set background as maximum value of intensity histogram;
+		- 'mode':
+			Set background as mode of the dataset,
+			where mode = 2.5*median - 1.5*mean;
+		- otherwise background gets set to zero.
+	"""
 	if method == 'hist':
-		yhist,xhist = np.histogram(data_sorted,bins=10)
-		bg = xhist[np.argmax(yhist)+1]
+		yhist,xhist = np.histogram(data,bins=len(np.unique(data)))
+		bg = xhist[np.argmax(yhist)]
 	elif method == 'mode':
-		bg = 2.5*np.median(data_sorted) - 1.5*np.mean(data_sorted)
+		bg = 2.5*np.median(data) - 1.5*np.mean(data)
 	else:
 		bg = 0
 	return bg
@@ -53,8 +62,7 @@ def fitter(grid,data,peaks=1,mu=[],theta=[],FWHM=[],
 	var_pos=0.01,var_theta=0.5,var_FWHM=0.5,
 	dist_factor=2,bg_method='hist'):
 	"""
-	Function takes array image, its grid and boolean array of same shape,
-	which is True where pixels are saturated and False elsewhere.
+	Function takes array image, its grid.
 	Returns the image with saturated pixels corrected.
 	Saturated pixels in data can only be represented by 'nan' values.
 	"""
