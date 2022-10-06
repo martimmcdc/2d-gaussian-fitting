@@ -61,7 +61,6 @@ def background(data,method='hist'):
 def def_fitter(grid,data,header,savename="",input_filename="",
 	var_pos=0.01,var_theta=0.5,var_FWHM=0.5,
 	dist_factor=2,bg_method='hist'):
-	sources = len(df)
     
     # opening the input file
 	table = fits.open(input_filename)[1].data
@@ -69,6 +68,7 @@ def def_fitter(grid,data,header,savename="",input_filename="",
 	df['l'] = np.empty(sources)
 	df['b'] = np.empty(sources)
 	names = df['Name'].copy()
+	sources = len(df)
     
     # check for image file coordenates
 	if header["CTYPE1"] == "GLON-TAN" and header["CTYPE2"] == "GLAT-TAN":
