@@ -61,7 +61,7 @@ def background(data,method='hist'):
 def fitter(grid,data,peaks=1,mu=[],theta=[],FWHM=[],
 	units_theta='deg',units_FWHM='arcsec',
 	var_pos=0.01,var_theta=0.5,var_FWHM=0.5,
-	dist_factor=2,bg_method='hist'):
+	fitting_radius=4,bg_method='hist'):
 	"""
 	Function takes array image, its grid.
 	Returns the image with saturated pixels corrected.
@@ -102,11 +102,11 @@ def fitter(grid,data,peaks=1,mu=[],theta=[],FWHM=[],
 	# limit fitting pixels to the vicinity of the sources
 	near_pixels = np.empty(list(X.shape)+[peaks],bool)
 	for i in range(peaks):
-		near_pixels[:,:,i] = np.sqrt((X-mu[i,0])**2 + (Y-mu[i,1])**2) <= dist_factor*FWHM[i,0]
+		near_pixels[:,:,i] = np.sqrt((X-mu[i,0])**2 + (Y-mu[i,1])**2) <= fitting_radius*FWHM[i,0]
 	near_pixels = near_pixels.any(axis=2)
 
 	# exclude background from fitting pixels
-	bg = background(data[~sat].copy(),method=bg_method)
+	bg = background(data[~sat&near_pixels].copy(),method=bg_method)
 	above_bg = data >= bg
 
 	# processed data points to be fitted
@@ -146,7 +146,7 @@ def fitter(grid,data,peaks=1,mu=[],theta=[],FWHM=[],
 	plt.figure(figsize=(8,8))
 	plt.imshow(np.log10(used_image),origin='lower')
 	plt.show()
-	return params,image
+	return params,image,bg
 
 def display_fits(file,lims=[],return_vals=False):
 	"""
