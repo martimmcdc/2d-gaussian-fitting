@@ -254,7 +254,7 @@ def display_fits(file,lims=[],return_vals=False, view=True):
     
 	data_sub = data[(y>=yb)&(y<=yt),:][:,(x<=xl)&(x>=xr)]
 
-	if view==True:
+	if view:
 		plt.figure(figsize=(8,8))
 		plt.imshow(np.log10(data_sub),origin='lower',extent=(xl,xr,yb,yt))
 		plt.xlabel(header['ctype1']+' [{}]'.format(header['cunit1']))
