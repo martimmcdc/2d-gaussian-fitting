@@ -7,6 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from astropy.io import fits
+from visual_methods import *
 
 def gaussian(points,mx,my,N,theta,FWHMx,FWHMy):
 	"""
