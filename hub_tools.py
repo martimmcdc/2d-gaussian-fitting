@@ -110,6 +110,8 @@ def fitter(grid,data,peaks=1,mu=[],theta=[],FWHM=[],
 	above_bg = data >= bg
 
 	# processed data points to be fitted
+	contour = find_edges(sat | (near_pixels & above_bg))
+	edge_points = plot_edge(np.array([X[contour],Y[contour]],float))
 	conditions = (~sat) & near_pixels & above_bg
 	fit_x = np.array([X[conditions],Y[conditions]])
 	fit_data = data[conditions] - bg
@@ -127,7 +129,6 @@ def fitter(grid,data,peaks=1,mu=[],theta=[],FWHM=[],
 	lower_bounds = guess_params.copy()
 	upper_bounds = guess_params.copy()
 	var_list = np.array([var_pos,var_pos,0,var_theta,var_FWHM,var_FWHM])
-
 	for i in range(6):
 		lower_bounds[i::6] -= var_list[i]
 		upper_bounds[i::6] += var_list[i]
@@ -135,18 +136,21 @@ def fitter(grid,data,peaks=1,mu=[],theta=[],FWHM=[],
 	upper_bounds[2::6] = np.inf
 
 	# fitting
-	params,cov = curve_fit(gaussianMult,fit_x,fit_data,guess_params,bounds=(lower_bounds,upper_bounds),maxfev=4000)
+	params,cov = curve_fit(gaussianMult,fit_x,fit_data,guess_params,
+		bounds=(lower_bounds,upper_bounds),maxfev=4000)
 	
 	# generating final, corrected image
 	image = gaussianMult((X,Y),*params) + bg
 	image[~sat] = data[~sat]
-	used_image = image.copy()
-	used_image[~conditions] = np.nan
 
-	plt.figure(figsize=(8,8))
-	plt.imshow(np.log10(used_image),origin='lower')
-	plt.show()
-	return params,image,bg
+	return params,image,bg,edge_points
+
+def residuals(grid,data,params,bg):
+	sat = np.isnan(data)
+	gaussians = gaussianMult(grid,*params) + bg
+	residuals = data.copy()
+	residuals[~sat] = np.abs(data[~sat]-gaussians[~sat])/data[~sat]
+	return residuals
 
 def display_fits(file,lims=[],return_vals=False):
 	"""
