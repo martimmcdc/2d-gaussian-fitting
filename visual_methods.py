@@ -65,8 +65,7 @@ def draw_contour(ax,grid,data,mu,FWHM,fitting_radius,bg_method):
 	contour = find_edges(sat | (near_pixels & above_bg))
 	edge_points = plot_edge(np.array([X[contour],Y[contour]],float))
 
-	ax.plot(edge_points[:,0],edge_points[:,1])
-
+	ax.plot(edge_points[:,0],edge_points[:,1],color='black')
 
 def sweep_fit(grid,data,gaussians):
 	"""Make animated sweeping of the image and give transverse
@@ -105,14 +104,5 @@ def sweep_fit(grid,data,gaussians):
 	ax1.legend()
 	ax2.legend()
 	ani = FuncAnimation(fig,f,interval=200,blit=True,save_count=50)
-
-
-
-
-
-
-
-
-
-
+	plt.show()
 

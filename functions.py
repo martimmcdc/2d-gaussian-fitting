@@ -6,7 +6,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+from scipy.optimize import curve_fit
 from astropy.io import fits
+import astropy.units as u
+from astropy.coordinates import SkyCoord
 
 
 
@@ -70,6 +73,97 @@ def residuals(grid,data,params,bg):
 
 
 
+### Fitting ###
+
+def fitter(grid,data,peaks=1,mu=[],theta=[],FWHM=[],
+	units_theta='deg',units_FWHM='arcsec',
+	var_pos=0.01,var_theta=0.5,var_FWHM=0.5,
+	fitting_radius=4,bg_method='hist'):
+	"""
+	Function takes array image, its grid.
+	Returns the image with saturated pixels corrected.
+	Saturated pixels in data can only be represented by 'nan' values.
+	"""
+
+	X,Y = grid # unpack grid
+	sat = np.isnan(data) # detect saturated pixels
+	
+	# use copies of peak info, because they may be changed in unit conversion
+	theta = theta.copy()
+	FWHM = FWHM.copy()
+    
+    # initial guess for peak positions
+	if len(mu)==0:
+		mu_x = X[sat].mean()
+		mu_y = Y[sat].mean()
+		mu = np.array(peaks*[[mu_x,mu_y]],float)
+	else:
+		peaks = len(mu)
+
+	# initial guess for peak heights
+	N = data[~sat].max()
+
+	# initial guess for semimajor-axis angle with x-axis
+	if len(theta)==0:
+		theta = np.zeros(peaks,float)
+		var_theta = np.pi
+	elif units_theta == 'deg':
+		theta *= np.pi/180
+		var_theta *= np.pi/180
+
+	# initial guess for Full-Width at Half Maximum
+	if len(FWHM)==0:
+		FWHM = np.ones([peaks,2],float)*18.2/3600
+	elif units_FWHM == 'arcsec':
+		FWHM /= 3600
+		var_FWHM /= 3600
+
+	# limit fitting pixels to the vicinity of the sources
+	near_pixels = np.empty(list(X.shape)+[peaks],bool)
+	for i in range(peaks):
+		near_pixels[:,:,i] = np.sqrt((X-mu[i,0])**2 + (Y-mu[i,1])**2) <= fitting_radius*FWHM[i,0]
+	near_pixels = near_pixels.any(axis=2)
+
+	# exclude background from fitting pixels
+	bg = background(data[~sat&near_pixels].copy(),method=bg_method)
+	above_bg = data >= bg
+
+	# processed data points to be fitted
+	conditions = (~sat) & near_pixels & above_bg
+	fit_x = np.array([X[conditions],Y[conditions]])
+	fit_data = data[conditions] - bg
+
+	# initial guess parameters
+	guess_params = np.empty(6*peaks,float)
+	guess_params[::6] = mu[:,0]
+	guess_params[1::6] = mu[:,1]
+	guess_params[2::6] = N*1.1 - bg
+	guess_params[3::6] = theta
+	guess_params[4::6] = FWHM[:,0]
+	guess_params[5::6] = FWHM[:,1]
+
+	# upper and lower bounds for parameters
+	lower_bounds = guess_params.copy()
+	upper_bounds = guess_params.copy()
+	var_list = np.array([var_pos,var_pos,0,var_theta,var_FWHM,var_FWHM])
+	for i in range(6):
+		lower_bounds[i::6] -= var_list[i]
+		upper_bounds[i::6] += var_list[i]
+	lower_bounds[2::6] = 0
+	upper_bounds[2::6] = np.inf
+
+	# fitting
+	params,cov = curve_fit(gaussianMult,fit_x,fit_data,guess_params,
+		bounds=(lower_bounds,upper_bounds),maxfev=4000)
+	
+	# generating final, corrected image
+	image = gaussianMult((X,Y),*params) + bg
+	image[~sat] = data[~sat]
+
+	return image,params,bg
+
+
+
 #### File handeling functions ###
 
 def open_fits_image(file,lims=[],show=False):
@@ -126,22 +220,79 @@ def open_fits_table(file,ext=1):
 	header = hdu.header
 	table = hdu.data
 
-	# Return pandas DataFrame object
+	# Return pandas DataFrame() instance
 	return pd.DataFrame(table)
 
+def get_parameters(df,coords='galactic',units='degree',wavelength=''):
 
-def get_parameters(df,coords='galactic'):
+	# Identify columns in DataFrame
+	cols = list(df.columns)
+	cols_low = [x.lower() for x in cols] # list of lowercase column names
 
-	cols list(df.columns)
-	cols_low = [x.lower() for x in cols]
+	# Lists of possible nomenclature for coordinates (names1),
+	# semi-major axis orientation relative to horizontal (names2)
+	# and FWHM values (names3)
+	names1 = np.array([
+		('l','b','galactic'),
+		('ra','dec','icrs'),
+		('ra','de','icrs'),
+		('raj2000','dej2000','icrs'),
+		('raj2000','decj2000','icrs')])
+	names2 = np.array(['pa','theta','angle'])
+	names3 = np.array([
+		('amaj','amin'),
+		('fwhmx','fwhmy'),
+		('amaj'+wavelength,'amin'+wavelength),
+		('fwhmx'+wavelength,'fwhmy'+wavelength)])
 
-	if coords=='galactic':
-		if ('l' and 'b') in cols_low:
-			l_col = cols_low.index('l')
-			b_col = cols_low.index('b')
-			mu = np.array(df[[cols[l_col],cols[b_col]]])
-		elif ('ra' and ('de' or 'dec')) or ('raj2000' and ('dej2000' or 'decj2000')) in cols_low:
-			ra_col
+	# Figure out used nomeclature and return arrays with values for each source
+	i = None
+	for n in range(len(names1)):
+		if (names1[n,0] and names1[n,1]) in cols_low:
+			i = n
+			break
+		else: continue
+	if i is None:
+		print('Coordinate column names do not correspond to ICRS or Galactic systems.')
+		mu = []
+	else:
+		xcol,ycol = cols_low.index(names1[i,0]),cols_low.index(names1[i,1])
+		x,y = df[[cols[xcol],cols[ycol]]].values.transpose()
+		xvar,yvar = names1[names1[:,-1]==coords][0,:-1]
+		mu = SkyCoord(x*u.degree,y*u.degree,frame=names1[i,2])
+		lon = getattr(getattr(getattr(mu,coords),xvar),units)
+		lat = getattr(getattr(getattr(mu,coords),yvar),units)
+		mu = np.array([lon,lat],float).transpose()
+
+	i = None
+	for n in range(len(names1)):
+		if names2[n] in cols_low:
+			i = n
+			break
+		else: continue
+	if i is None:
+		print('PA column names are not identifiable.')
+		theta = []
+	else:
+		col = cols_low.index(names2[i])
+		theta = df[cols[xcol]].to_numpy(float)
+
+	i = None
+	for n in range(len(names3)):
+		if (names3[n,0] and names3[n,1]) in cols_low:
+			i = n
+			break
+		else: continue
+	if i is None:
+		print('FWHM column names are not identifiable.')
+		FWHM = []
+	else:
+		xcol,ycol = cols_low.index(names3[i,0]),cols_low.index(names3[i,1])
+		FWHM = df[[cols[xcol],cols[ycol]]].to_numpy(float)
+	return mu,theta,FWHM
+
+
+
 
 
 
