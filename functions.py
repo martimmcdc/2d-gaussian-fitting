@@ -240,8 +240,6 @@ def get_parameters(df,coords='galactic',units='degree',wavelength=''):
 		('raj2000','decj2000','icrs')])
 	names2 = np.array(['pa','theta','angle'])
 	names3 = np.array([
-		('amaj','amin'),
-		('fwhmx','fwhmy'),
 		('amaj'+wavelength,'amin'+wavelength),
 		('fwhmx'+wavelength,'fwhmy'+wavelength)])
 
