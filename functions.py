@@ -75,7 +75,7 @@ def residuals(grid,data,params,bg):
 
 ### Fitting ###
 
-def fitter(grid,data,peaks=1,mu=[],theta=[],FWHM=[],
+def fitter(data,grid,peaks=1,mu=[],theta=[],FWHM=[],
 	units_theta='deg',units_FWHM='arcsec',
 	var_pos=0.01,var_theta=0.5,var_FWHM=0.5,
 	fitting_radius=4,bg_method='hist'):
@@ -164,7 +164,7 @@ def fitter(grid,data,peaks=1,mu=[],theta=[],FWHM=[],
 
 
 
-#### File handeling functions ###
+#### File and data handeling functions ###
 
 def open_fits_image(file,lims=[],show=False):
 	"""
@@ -196,9 +196,9 @@ def open_fits_image(file,lims=[],show=False):
 		xl,xr,yb,yt = x.max(),x.min(),y.min(),y.max()
 	else:
 		xl,xr,yb,yt = lims
-	xsub = x[(x<=xl)&(x>=xr)]
-	ysub = y[(y>=yb)&(y<=yt)]
-	data_sub = data[(y>=yb)&(y<=yt),:][:,(x<=xl)&(x>=xr)]
+	xlim,ylim = (x<=xl)&(x>=xr),(y>=yb)&(y<=yt)
+	xsub,ysub = x[xlim],y[ylim]
+	data_sub = data[ylim,:][:,xlim]
 
 	# If image is to be displayed
 	if show:
@@ -209,7 +209,7 @@ def open_fits_image(file,lims=[],show=False):
 		plt.show()
 
 	grid = np.meshgrid(xsub,ysub)
-	return grid,data_sub
+	return data_sub,grid
 
 def open_fits_table(file,ext=1):
 	"""Open table in .fits format, which is usually in the 1st extension."""
@@ -263,7 +263,7 @@ def get_parameters(df,coords='galactic',units='degree',wavelength=''):
 		mu = np.array([lon,lat],float).transpose()
 
 	i = None
-	for n in range(len(names1)):
+	for n in range(len(names2)):
 		if names2[n] in cols_low:
 			i = n
 			break
@@ -273,7 +273,7 @@ def get_parameters(df,coords='galactic',units='degree',wavelength=''):
 		theta = []
 	else:
 		col = cols_low.index(names2[i])
-		theta = df[cols[xcol]].to_numpy(float)
+		theta = df[cols[col]].to_numpy(float)
 
 	i = None
 	for n in range(len(names3)):
@@ -288,6 +288,11 @@ def get_parameters(df,coords='galactic',units='degree',wavelength=''):
 		xcol,ycol = cols_low.index(names3[i,0]),cols_low.index(names3[i,1])
 		FWHM = df[[cols[xcol],cols[ycol]]].to_numpy(float)
 	return mu,theta,FWHM
+
+def grid_lims(grid):
+	xl,xr,yb,yt = grid[0][0,0], grid[0][0,-1], grid[1][0,0], grid[1][-1,0]
+	return xl,xr,yb,yt
+
 
 
 
