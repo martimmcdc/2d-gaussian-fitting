@@ -223,7 +223,7 @@ def open_fits_table(file,ext=1):
 	# Return pandas DataFrame() instance
 	return pd.DataFrame(table)
 
-def get_parameters(df,coords='galactic',units='degree',wavelength=''):
+def get_parameters(df,coords='galactic',wavelength=''):
 
 	# Identify columns in DataFrame
 	cols = list(df.columns)
@@ -258,8 +258,8 @@ def get_parameters(df,coords='galactic',units='degree',wavelength=''):
 		x,y = df[[cols[xcol],cols[ycol]]].values.transpose()
 		xvar,yvar = names1[names1[:,-1]==coords][0,:-1]
 		mu = SkyCoord(x*u.degree,y*u.degree,frame=names1[i,2])
-		lon = getattr(getattr(getattr(mu,coords),xvar),units)
-		lat = getattr(getattr(getattr(mu,coords),yvar),units)
+		lon = getattr(getattr(mu,coords),xvar).degree
+		lat = getattr(getattr(mu,coords),yvar).degree
 		mu = np.array([lon,lat],float).transpose()
 
 	i = None

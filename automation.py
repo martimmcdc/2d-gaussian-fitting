@@ -6,10 +6,10 @@ import numpy as np
 from astropy.io import fits
 from functions import *
 
-def automation(table,files,target,path='',**kwargs):
+def automation(table,files,target,path='',wavelength='',**kwargs):
 
 	sources = open_fits_table(path+table)
-	mu,theta,FWHM = get_parameters(sources,)
+	mu,theta,FWHM = get_parameters(sources,wavelength=wavelength)
 
 	for image in files:
 		data,grid = open_fits_image(path+image)
@@ -19,13 +19,7 @@ def automation(table,files,target,path='',**kwargs):
 
 		mu0,theta0,FWHM0 = mu[in_window],theta[in_window],FWHM[in_window]
 		peaks = len(mu0)
-		print(peaks)
 		data_fit,params,bg = fitter(data,grid,peaks,mu0,theta0,FWHM0,**kwargs)
-
-		plt.figure()
-		plt.imshow(data_fit,extent=[xl,xr,yb,yt],origin='lower')
-		plt.show()
-	return in_window
 
 	
 
