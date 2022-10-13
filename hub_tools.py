@@ -94,59 +94,6 @@ def fitter(grid,data,peaks=1,mu=[],theta=[],FWHM=[],
 
 	return params,image,bg
 
-def residuals(grid,data,params,bg):
-	sat = np.isnan(data)
-	gaussians = gaussianMult(grid,*params) + bg
-	residuals = data.copy()
-	residuals[~sat] = np.abs(data[~sat]-gaussians[~sat])/data[~sat]
-	return residuals
-
-def display_fits(file,lims=[],return_vals=False):
-	"""
-	Display a 2D array image from a standard FITS file.
-	This function assumes the coordinates to be the galactic system,
-	where longitude increases from right to left
-	and latitude increases from bottom to top,
-	both in degrees.
-	The lims argument is a list which, if given, must contain:
-	1. Left limit (xl)
-	2. Right limit (xr)
-	3. Bottom limit (yb)
-	4. Top limit (yt)
-	of the window in this order.
-	"""
-    
-	# Open and read
-	hdulist = fits.open(file)
-	hdu = hdulist[0]
-	header = hdu.header
-	data = hdu.data
-
-	# Get axes right
-	x = header['crval1'] + header['cdelt1'] * (np.arange(0,header['naxis1'],1) - header['crpix1'])
-	y = header['crval2'] + header['cdelt2'] * (np.arange(0,header['naxis2'],1) - header['crpix2'])
-	# If window limits are given
-	if len(lims)==0:
-		xl,xr,yb,yt = x.max(),x.min(),y.min(),y.max()
-	else:
-		xl,xr,yb,yt = lims
-    
-	xsub = x[(x<=xl)&(x>=xr)]
-	ysub = y[(y>=yb)&(y<=yt)]
-    
-	data_sub = data[(y>=yb)&(y<=yt),:][:,(x<=xl)&(x>=xr)]
-
-	plt.figure(figsize=(8,8))
-	plt.imshow(np.log10(data_sub),origin='lower',extent=(xl,xr,yb,yt))
-	plt.xlabel(header['ctype1']+' [{}]'.format(header['cunit1']))
-	plt.ylabel(header['ctype2']+' [{}]'.format(header['cunit2']))
-	plt.show()
-
-	if return_vals:
-		grid = np.meshgrid(xsub,ysub)
-		sat_area = np.isnan(data_sub)
-		return grid,data_sub,sat_area
-
     
 def file_fitter(file,FWHMval):
 	grid,data,sat_area = display_fits(file,return_vals=True)
