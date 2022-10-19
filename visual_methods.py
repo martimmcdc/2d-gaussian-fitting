@@ -1,3 +1,9 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# In[ ]:
+
+
 """
 This script contains functions which can be called to help visualization.
 """
@@ -67,15 +73,16 @@ def draw_contour(ax,grid,data,mu,FWHM,fitting_radius,bg_method):
 
 	ax.plot(edge_points[:,0],edge_points[:,1],color='black')
 
-def sweep_fit(grid,data,gaussians):
+def sweep_fit(grid,data,params,bg):
 	"""Make animated sweeping of the image and give transverse
 	perspective of data and fit in linear and logarithmic scales."""
+	gaussians = gaussianMult(grid,*params) + bg
 	X,Y = grid
 	x,y = X[0,:],Y[:,0]
 	xl,xr,yb,yt = x[0],x[-1],y[0],y[-1]
 	sat = np.isnan(data)
 
-	fig = plt.figure(figsize=(12,6))
+	fig = plt.figure(figsize=(10,5))
 	gs = fig.add_gridspec(2, 2)
 	ax0 = fig.add_subplot(gs[:,0],title='Image sweeping')
 	ax1 = fig.add_subplot(gs[0,1],title='Linear scale',yscale='linear')
@@ -95,14 +102,46 @@ def sweep_fit(grid,data,gaussians):
 	line3, = ax2.plot(x,data[0,:],label='Data')
 	line4, = ax2.plot(x,gaussians[0,:],label='Fit')
 	def f(i):
-	    line0.set_ydata(y[i])
-	    line1.set_ydata(data[i,:])
-	    line2.set_ydata(gaussians[i,:])
-	    line3.set_ydata(data[i,:])
-	    line4.set_ydata(gaussians[i,:])
-	    return [line0,line1,line2,line3,line4]
+		line0.set_ydata(y[i])
+		line1.set_ydata(data[i,:])
+		line2.set_ydata(gaussians[i,:])
+		line3.set_ydata(data[i,:])
+		line4.set_ydata(gaussians[i,:])
+		return [line0,line1,line2,line3,line4]
 	ax1.legend()
 	ax2.legend()
 	ani = FuncAnimation(fig,f,interval=200,blit=True,save_count=50)
 	plt.show()
 
+def results_plot(data,grid,image,params,bg,mu,FWHM,fitting_radius,bg_method='hist'):
+	gaussians = gaussianMult(grid,*params) + bg
+	resid = residuals(grid,data,params,bg)
+	xl,xr,yb,yt = grid_lims(grid)
+
+	vmin,vmax = image.min(),image.max()
+	lin_norm = Normalize(vmin,vmax)
+	log_norm = LogNorm(vmin,vmax)
+    
+	fig,[[ax0,ax1],[ax2,ax3]] = plt.subplots(2,2,figsize=(10,10))
+
+	im0 = ax0.imshow(data,origin='lower',extent=[xl,xr,yb,yt],norm=log_norm)
+	ax0.scatter(mu[:,0],mu[:,1],color='red',marker='+')
+	draw_contour(ax0,grid,data,mu,FWHM,fitting_radius,bg_method)
+
+	im1 = ax1.imshow(image,origin='lower',extent=[xl,xr,yb,yt],norm=log_norm)
+	ax1.scatter(mu[:,0],mu[:,1],color='black',marker='+')
+	ax1.scatter(params[::6],params[1::6],color='red',marker='+')
+
+	im2 = ax2.imshow(gaussians,origin='lower',extent=[xl,xr,yb,yt],norm=log_norm)
+	ax2.scatter(mu[:,0],mu[:,1],color='red',marker='+')
+
+	im3 = ax3.imshow(resid,origin='lower',extent=[xl,xr,yb,yt])
+	ax3.scatter(mu[:,0],mu[:,1],color='red',marker='+')
+
+	plt.colorbar(im0,ax=ax0,shrink=0.75)
+	plt.colorbar(im1,ax=ax1,shrink=0.75)
+	plt.colorbar(im2,ax=ax2,shrink=0.75)
+	plt.colorbar(im3,ax=ax3,shrink=0.75)
+
+	fig.tight_layout()
+	plt.show()

@@ -1,3 +1,9 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# In[ ]:
+
+
 """This file contains mathematical and other functions used in the rest of the program."""
 
 
@@ -292,20 +298,4 @@ def get_parameters(df,coords='galactic',wavelength=''):
 def grid_lims(grid):
 	xl,xr,yb,yt = grid[0][0,0], grid[0][0,-1], grid[1][0,0], grid[1][-1,0]
 	return xl,xr,yb,yt
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
