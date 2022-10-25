@@ -11,6 +11,7 @@ import os
 import numpy as np
 from astropy.io import fits
 from matplotlib.colors import Normalize,LogNorm
+import dfitspy
 from functions import *
 from visual_methods import *
 
@@ -19,6 +20,11 @@ def automation(table,files,path='',save_path='',wavelength='',show=False,**kwarg
 	sources = open_fits_table(path+table)
 	mu,theta,FWHM = get_parameters(sources,wavelength=wavelength)
 	new_list = []
+	if files == ["all"]:
+		all_files = dfitspy.get_files(["all"], direc[:-1])
+		files_sort = dfitspy.dfitsort(all_files,["all"],exact=True)
+		files = list(dict(files_sort.items()))
+		files.remove(table)
 
 	for image in files:
 		data,grid = open_fits_image(path+image)
