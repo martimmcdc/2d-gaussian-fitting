@@ -1,0 +1,7 @@
+Usage of the SatFitter code:
+
+In order to run the codes the scripts must be in the same path as the folders containing the data and the output fitted files. 
+In case of running the autorun.py file the terminal must be in the same directory as mentioned above, with all the scripts and the target & destination folders. 
+These files can be moved to other locations as long as they are always in the same directory as each other and the mentioned folders.
+
+Once assembled the code can be used as long as the script/terminal file is working in the directory of the functions.

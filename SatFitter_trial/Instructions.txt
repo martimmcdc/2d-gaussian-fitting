@@ -1,0 +1,139 @@
+General function documentation and instructions
+
+
+
+### Visualising the data ###
+
+The function open_fits_image() can be used to retrieve the data array and grid and, if the parameter "show" is set to True, plots the data in a 2D image.
+
+The function open_fits_table() reads the table containing the sources information, converting it into a pandas table.
+From the table we can extract the information needed, more specifically the sources positions, angles and FWHM values respectively.
+
+
+
+### Fitting the image ###
+
+Using the fitter() function you can fit the data array using gaussian sources. The only necessary inputs are the data array and the grid, however if nothing else is provided the function will assume it is fitting 1 source, as well as several other parameters. For more complex cases it is crucial to provide additional information. Here we will use the input from the table to fit 8 sources to the image, only taking into consideration the area that is within 2 times the FWHM of each source. The background value here will be determined using the histogram method.
+The function returns the resulting fixed 2D array, the fitted sources parameters and the estimated background value.
+Note that some of the provided sources are in the unsaturated region, this is so that the code considers these sources when fitting the saturated regions, otherwise the flux from these may interfere with the results.
+A more detailed review of the fitter function is done in the "Example_Notebook_Fitter.ipynb" notebook.
+
+
+
+### Visualising the results ###
+
+The results for each fit can be viewed using the functions results_plot and sweep_fit().
+
+results_plot() takes in the original grid and data, the resulting image, parameters and background returned by the fitter, inputted position, FWHM values as well as the fitting radius and background method used in the fitter, returning 4 plots:
+
+ 	- Top-Left: The original image with inputted source positions and area considered for fit;
+ 	- Top-Right: The fixel image with inputted source positions and resulting positions;
+ 	- Bottom-Left: A plot of the fitted gaussians on a constant estimated background;
+ 	- Bottom-Right:The residuals between the original image and resulting image.
+
+sweep_fit() takes in the original grid and data as well as the resulting parameters and background, returning 3 animated plots:
+  
+	- Left: original image with a red horizontal line indicating the row being read;
+ 	- Top-Right: Flux vs Longitude plot of the data and the fit in linear scale;
+ 	- Top-Left: Flux vs Longitude plot of the data and the fit in logarithmic scale;
+
+Note that the function can be called without specifying the inputted position, FWHM, fitting radius and background method, however the results plots will represent certain aspects incorrectly (more specifically the contour area in graph 1 and the input position markers) as it will be assumed no input was given to the fitter function and thus the default values will be used.
+
+
+
+### Automation ###
+
+The automation function allows for a fast and simple application on multiple files. The function should be provided with a single table with the source info for every image (they do not need to be ordered), a list containing all file names to be analysed, the path to the data and table, the path where the fixed images will be saved and the wavelength of the data (in case multiple wavelength values of FWHM are provided in the table, such as [amaj250, amin250, amaj160, amin160,...], which is not our case).
+The argument "show" can also be set to True, in which case the function will plot the fixed images in logarithmic scale.
+Other arguments for the fitter() function, such as position and FWHM variation intervals, can be provided after the above mentioned.
+The function can be instructed to take all files in the specified path folder by setting file_list to ["all"]. In this case beware that all files will be analysed, except for the table which should be in the same path as the images, so it is important to have all images to be analysed and the table in an isolated folder.
+
+
+
+
+
+### autorun.py ###
+
+The file autorun.py when executed requests by order:
+	- the name of the table file
+	- the folder in which the target images and table are located (with a "/" at the end), 
+	- the folder in which the resulting fitted files should be saved (leave as "" to save in the same location as the autorun.py file),  
+	- a 1 or 0 number, specifying if you wish to plot the results image for all files (1) or not (0),
+	- the fitting radius number.
+
+
+
+
+### General function sheet ###
+
+open_fits_image(file,lims,show=False)
+ 
+file				 - name of the file as a str;
+limits=[left,right,bottom,upper]	 - list or array with borders of the desired sub-image;
+show				 - boolean specifying if the function should plot the image.
+
+-> Returns the data and grid of the cropped (if applicable) image.
+
+−−−−−−−−−−−−−−−−−−−−−−−
+
+fitter(data,grid,peaks=1,mu=[],theta=[],FWHM=[],
+units−−−theta="deg",units−−−FWHM="arcsec",
+var_pos=0.01,var_theta=0.5,var_FWHM=0.5,
+fitting_radius=4,bg_method="hist")
+
+data			 - 2D matrix extracted from .fits file;
+grid			 - arrays containing values of longitude and latitude;
+peaks (optional)		 - int specifying number of peaks to fit in the saturated area (only if no initial information is provided about the sources);
+mu (optional)		 - array containing pairs of values specifying the position of the peaks;
+theta (optional)		 - array containing the angle between the semi major axis and the longitude;
+FWHM (optional)		 - arrays containing pairs of values specifying the FWHM on the x and y axis;
+units_theta (optional)	 - string object to change input of theta from degrees to arcsec;
+units_FWHM (optional)	 - string object to change input of FWHM from arcsec to degrees;
+var_pos (optional)	 - float indicating the tolerance for position variation, only use if mu is specified;
+var_theta (optional)	 - float indicating the variation interval for angle, only use if theta is specified;
+var_FWHM (optional)	 - float indicating the variation interval for FWHM, only use if FWHM is specified;
+fitting_radius (optional)	 - radius outside which data will be discarded for analysis;
+bg_method (optional)	 - string element specifying which method is to be used to calculate the background flux value, can be "hist" or "mode".
+
+-> Returns corrected data image, parameters of the fitted gaussians and the estimated background value.
+
+−−−−−−−−−−−−−−−−−−−−−−−
+
+results_plot(data,grid,image,params,bg,mu=[],FWHM=[],fitting_radius=4,bg_method="hist")
+
+data			 - 2D matrix extracted from .fits file;
+grid			 - arrays containing values of longitude and latitude;
+image			 - 2D matrix containing the corrected image returned by the fitter function;
+params			 - 1D array containing parameters of fitted gaussians returned by the fitter function;
+bg			 - background flux value returned by the fitter function;
+mu (optional)		 - array containing pairs of values specifying the position of the peaks;
+FWHM (optional)		 - arrays containing pairs of values specifying the FWHM on the x and y axis;
+fitting_radius (optional)	 - radius outside which data will be discarded for analysis;
+bg_method (optional)	 - string element specifying which method is to be used to calculate the background flux value, can be "hist" or "mode".
+
+-> Plots 4 graphs representing the results of the fit.
+
+−−−−−−−−−−−−−−−−−−−−−−−
+
+sweep_fit(grid,data,params,bg)
+
+data		 - 2D matrix extracted from .fits file;
+grid		 - arrays containing values of longitude and latitude;
+params		 - 1D array containing parameters of fitted gaussians returned by the fitter function;
+bg		 - background flux value returned by the fitter function;
+
+-> Plots animated graphs showing the original data and fitted flux for each row.
+
+−−−−−−−−−−−−−−−−−−−−−−−
+
+automation(table,files,path="",save_path="",wavelength="",show=False,**kargs)
+
+table			 - name of table containing sources info;
+files			 - names of file as a list;
+path (optional)	 	 - path where the table and files are found;
+save_path (optional)	 - path where corrected files are to be saved, with the same name and "_fix.fits" in the end;
+wavelength (optional)	 - string element specifying the wavelength of files in case input table contains FWHM values of multiple wavelengths;
+show (optional)		 - boolean specifying if the function should plot the fixed image and residuals plots for every file;
+**kargs (optional)	 - any other variables to be provided to the fitter function, such as variation intervals or units
+
+-> Returns list containing names of the saved fixed files.
