@@ -3,7 +3,7 @@
 The file autorun.py when executed requests by order:
 	- the name of the table file (with extension .fits)
 	- the folder in which the target images and table are located (with a "/" at the end), 
-	- the folder in which the resulting fitted files should be saved (leave as "" to save in the same location as the autorun.py file),  
+	- the folder in which the resulting fitted files should be saved (leave as blank to save in the same location as the autorun.py file),  
 	- a 1 or 0 number, specifying if you wish to plot the results image for all files (1) or not (0),
 	- the fitting radius to be used as a number (by default 4).
 
