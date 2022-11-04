@@ -16,6 +16,7 @@ from scipy.optimize import curve_fit
 from astropy.io import fits
 import astropy.units as u
 from astropy.coordinates import SkyCoord
+from astropy.table import Table
 
 
 
@@ -245,13 +246,15 @@ def open_fits_table(file,ext=1):
 	"""Open table in .fits format, which is usually in the 1st extension."""
 
 	# Open and read
-	hdulist = fits.open(file)
-	hdu = hdulist[ext]
-	header = hdu.header
-	table = hdu.data
+	table = Table.read(file)
+	#hdulist = fits.open(file)
+	#hdu = hdulist[ext]
+	#header = hdu.header
+	#table = hdu.data
+	df = table.to_pandas()
 
 	# Return pandas DataFrame() instance
-	return pd.DataFrame(table)
+	return df#pd.DataFrame(table)
 
 def get_parameters(df,coords='galactic',wavelength=''):
 
@@ -282,15 +285,15 @@ def get_parameters(df,coords='galactic',wavelength=''):
 		else: continue
 	if i is None:
 		print('Coordinate column names do not correspond to ICRS or Galactic systems.')
-		mu = []
+		mu_raw = []
 	else:
 		xcol,ycol = cols_low.index(names1[i,0]),cols_low.index(names1[i,1])
 		x,y = df[[cols[xcol],cols[ycol]]].values.transpose()
 		xvar,yvar = names1[names1[:,-1]==coords][0,:-1]
-		mu = SkyCoord(x*u.degree,y*u.degree,frame=names1[i,2])
-		lon = getattr(getattr(mu,coords),xvar).degree
-		lat = getattr(getattr(mu,coords),yvar).degree
-		mu = np.array([lon,lat],float).transpose()
+		mu_raw = SkyCoord(x*u.degree,y*u.degree,frame=names1[i,2])
+		lon = getattr(getattr(mu_raw,coords),xvar).degree
+		lat = getattr(getattr(mu_raw,coords),yvar).degree
+		mu_raw = np.array([lon,lat],float).transpose()
 
 	i = None
 	for n in range(len(names2)):
@@ -300,10 +303,10 @@ def get_parameters(df,coords='galactic',wavelength=''):
 		else: continue
 	if i is None:
 		print('PA column names are not identifiable.')
-		theta = []
+		theta_raw = []
 	else:
 		col = cols_low.index(names2[i])
-		theta = df[cols[col]].to_numpy(float)
+		theta_raw = df[cols[col]].to_numpy(float)
 
 	i = None
 	for n in range(len(names3)):
@@ -313,10 +316,17 @@ def get_parameters(df,coords='galactic',wavelength=''):
 		else: continue
 	if i is None:
 		print('FWHM column names are not identifiable.')
-		FWHM = []
+		FWHM_raw = []
 	else:
 		xcol,ycol = cols_low.index(names3[i,0]),cols_low.index(names3[i,1])
-		FWHM = df[[cols[xcol],cols[ycol]]].to_numpy(float)
+		FWHM_raw = df[[cols[xcol],cols[ycol]]].to_numpy(float)
+       
+	#removing duplicate entries
+	mu,inds = np.unique(mu_raw, return_index=True, axis=0)
+	FWHM,theta = FWHM_raw[inds],theta_raw[inds]
+	if len(mu) != len(mu_raw):
+		print("Removed {} duplicate entries.".format(len(mu_raw)-len(mu)))
+    
 	return mu,theta,FWHM
 
 def grid_lims(grid):
